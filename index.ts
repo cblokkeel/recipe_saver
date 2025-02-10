@@ -1,5 +1,5 @@
 import { JSDOM } from "jsdom";
-import { getRecipeDetails } from "./utils/ai";
+import { getRecipeDetails, getRecipeImage } from "./utils/ai";
 import { Hono } from "hono";
 import { z } from "zod";
 import { validator } from "hono/validator";
@@ -59,8 +59,17 @@ app.post(
         const aiResponse = await getRecipeDetails(parsed);
         const recipe = parseAiResponse(aiResponse || "");
 
-        return c.json(recipe, 200); 
-    }
-)
+        getRecipeImage(recipe).then((imgUrl) => {
 
-export default app;
+            // TODO store this in a minio / S3
+            console.log("RECIPE IMG", imgUrl)
+        })
+
+        return c.json(recipe, 200);
+    }
+);
+
+export default {
+    port: 1171,
+    fetch: app.fetch,
+}

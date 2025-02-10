@@ -21,3 +21,18 @@ export async function getRecipeDetails(html: string) {
 
     return completion.choices[0].message.content;
 }
+
+export async function getRecipeImage({ ingredients, instructions }: {
+    ingredients: string[];
+    instructions: string[];
+}) {
+
+    const a = await ai.images.generate({
+        model: "dall-e-3",
+        prompt: `what would this recipe looks like: Ingredients: ${ingredients.join(";")}. Instructions: ${instructions.join(";")}`,
+        n: 1,
+        size: "1024x1024",
+    });
+
+    return a.data[0].url;
+}

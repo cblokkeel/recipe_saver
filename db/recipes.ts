@@ -9,6 +9,7 @@ export interface RecipeModel {
 
 const collection = db.collection("recipes");
 
-export function addRecipe(recipe: RecipeModel) {
-    collection.insertOne(recipe);
+export async function addRecipe(recipe: RecipeModel): Promise<string> {
+    const r = await collection.insertOne(recipe);
+    return r.insertedId.toString("hex");
 }
