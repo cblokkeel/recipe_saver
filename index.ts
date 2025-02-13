@@ -3,6 +3,7 @@ import { getRecipeDetails, getRecipeImage } from "./utils/ai";
 import { Hono } from "hono";
 import { z } from "zod";
 import { validator } from "hono/validator";
+import { minioClient, recipeBucketName } from "./utils/minio";
 
 interface Recipe {
     ingredients: string[],
@@ -37,6 +38,19 @@ const recipeReqSchema = z.object({
     recipeUrl: z.string().url(),
 });
 
+async function uploadImageToMinIO(imageUrl: string, bucketName: string, objectName: string) {
+    try {
+        const response = await fetch(imageUrl);
+        const imageBuffer = await response.arrayBuffer();
+        const buffer = Buffer.from(imageBuffer);
+        console.log("uploading on ", bucketName)
+
+        minioClient.putObject(bucketName, objectName, buffer);
+    } catch (error) {
+        console.error('Error fetching image:', error);
+    }
+}
+
 const app = new Hono();
 
 app.post(
@@ -60,10 +74,12 @@ app.post(
         const recipe = parseAiResponse(aiResponse || "");
 
         getRecipeImage(recipe).then((imgUrl) => {
+            if (imgUrl) {
+                // TODO use recipe title here
+                uploadImageToMinIO(imgUrl, recipeBucketName, "test_minio_working.png")
+            }
 
-            // TODO store this in a minio / S3
-            console.log("RECIPE IMG", imgUrl)
-        })
+        });
 
         return c.json(recipe, 200);
     }
