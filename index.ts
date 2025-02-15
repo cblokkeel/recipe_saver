@@ -4,10 +4,12 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { validator } from "hono/validator";
 import { minioClient, recipeBucketName } from "./utils/minio";
+import sharp from "sharp";
 
 interface Recipe {
-    ingredients: string[],
-    instructions: string[],
+    title: string;
+    ingredients: string[];
+    instructions: string[];
 }
 
 function removeTags(html: string) {
@@ -38,16 +40,44 @@ const recipeReqSchema = z.object({
     recipeUrl: z.string().url(),
 });
 
+function formatTitle(str: string): string {
+    return str
+            .split(" ")
+            .map((word: string, index: number) =>
+                index === 0 ? word.charAt(0).toUpperCase() + word.slice(1).toLowerCase() : word.toLowerCase()
+            )
+            .join(" ");
+}
+
 async function uploadImageToMinIO(imageUrl: string, bucketName: string, objectName: string) {
     try {
         const response = await fetch(imageUrl);
         const imageBuffer = await response.arrayBuffer();
         const buffer = Buffer.from(imageBuffer);
-        console.log("uploading on ", bucketName)
 
-        minioClient.putObject(bucketName, objectName, buffer);
+        sharp(buffer)
+            .resize(800, 800, {
+                fit: "inside",
+                withoutEnlargement: true,
+            })
+            .toFormat("jpeg")
+            .jpeg({
+                quality: 80,
+                chromaSubsampling: "4:2:0"
+            })
+            .toBuffer()
+            .then((optimized) => {
+                minioClient.putObject(bucketName, objectName, optimized).then(() => {
+                    console.log(`uploaded ${objectName} successfully`);
+                }).catch((error) => {
+                    console.error(`error uploading img ${objectName}: ${error}`);
+                });
+            })
+            .catch((error) => {
+                console.error("error optimizing img: ", error);
+            });
     } catch (error) {
-        console.error('Error fetching image:', error);
+        console.error("error fetching image:", error);
     }
 }
 
@@ -73,12 +103,12 @@ app.post(
         const aiResponse = await getRecipeDetails(parsed);
         const recipe = parseAiResponse(aiResponse || "");
 
+        recipe.title = formatTitle(recipe.title);
+
         getRecipeImage(recipe).then((imgUrl) => {
             if (imgUrl) {
-                // TODO use recipe title here
-                uploadImageToMinIO(imgUrl, recipeBucketName, "test_minio_working.png")
+                uploadImageToMinIO(imgUrl, recipeBucketName, `${recipe.title.replace(" ", "_").toLowerCase()}_cover.jpeg`);
             }
-
         });
 
         return c.json(recipe, 200);
