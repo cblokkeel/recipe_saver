@@ -5,8 +5,10 @@ import { z } from "zod";
 import { validator } from "hono/validator";
 import { minioClient, recipeBucketName } from "./utils/minio";
 import sharp from "sharp";
+import type { UUID } from "node:crypto";
 
 interface Recipe {
+    minioId: UUID;
     title: string;
     ingredients: string[];
     instructions: string[];
@@ -42,11 +44,11 @@ const recipeReqSchema = z.object({
 
 function formatTitle(str: string): string {
     return str
-            .split(" ")
-            .map((word: string, index: number) =>
-                index === 0 ? word.charAt(0).toUpperCase() + word.slice(1).toLowerCase() : word.toLowerCase()
-            )
-            .join(" ");
+        .split(" ")
+        .map((word: string, index: number) =>
+            index === 0 ? word.charAt(0).toUpperCase() + word.slice(1).toLowerCase() : word.toLowerCase()
+        )
+        .join(" ");
 }
 
 async function uploadImageToMinIO(imageUrl: string, bucketName: string, objectName: string) {
@@ -104,10 +106,11 @@ app.post(
         const recipe = parseAiResponse(aiResponse || "");
 
         recipe.title = formatTitle(recipe.title);
+        recipe.minioId = crypto.randomUUID();
 
         getRecipeImage(recipe).then((imgUrl) => {
             if (imgUrl) {
-                uploadImageToMinIO(imgUrl, recipeBucketName, `${recipe.title.replace(" ", "_").toLowerCase()}_cover.jpeg`);
+                uploadImageToMinIO(imgUrl, recipeBucketName, `public/${recipe.minioId}.jpeg`);
             }
         });
 
