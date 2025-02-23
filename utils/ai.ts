@@ -37,3 +37,21 @@ export async function getRecipeImage({ ingredients, instructions }: {
 
     return a.data[0].url;
 }
+
+export async function getGroceryListFromIngredients(ingredients: string[]) {
+    const completion = await ai.chat.completions.create({
+        messages: [
+            {
+                role: "system",
+                content: "You are an assistant that create a grocery store list from a list of ingredients. If one ingredients come up twice or more, you can merge them and add up the quantities. You only answer this JSON format: { list: <string[]> } Exemple : You receive a list of ingredients that looks like that : [200g onion, 100g tomato, 1 chicken breast, 350g onion]. You will answer with this list: [550g onion, 100g tomato, 1 chicken breast]."
+            },
+            {
+                role: "user", content: `Here is the ingredients: ${ingredients.join(",")}. Answer with provided JSON format`
+            }
+        ],
+        model: "gpt-4o",
+    });
+
+
+    return completion.choices[0].message.content;
+}

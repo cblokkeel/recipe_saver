@@ -1,5 +1,5 @@
 import { JSDOM } from "jsdom";
-import { getRecipeDetails, getRecipeImage } from "./utils/ai";
+import { getGroceryListFromIngredients, getRecipeDetails, getRecipeImage } from "./utils/ai";
 import { Hono } from "hono";
 import { z } from "zod";
 import { validator } from "hono/validator";
@@ -12,6 +12,10 @@ interface Recipe {
     title: string;
     ingredients: string[];
     instructions: string[];
+}
+
+interface Grocery {
+    list: string[];
 }
 
 function removeTags(html: string) {
@@ -33,13 +37,17 @@ function removeSpaces(str: string) {
     return str.replace(/\s+/g, "");
 }
 
-function parseAiResponse(txt: string): Recipe {
+function parseAiResponse<T>(txt: string): T {
     const split = txt.split("\n");
-    return JSON.parse(split.slice(1, split.length - 1).join("\n")) as Recipe;
+    return JSON.parse(split.slice(1, split.length - 1).join("\n")) as T;
 }
 
 const recipeReqSchema = z.object({
     recipeUrl: z.string().url(),
+});
+
+const groceryReqSchema = z.object({
+    ingredients: z.array(z.string()).min(1),
 });
 
 function formatTitle(str: string): string {
@@ -103,7 +111,7 @@ app.post(
         const parsed = removeSpaces(removeTags(html));
 
         const aiResponse = await getRecipeDetails(parsed);
-        const recipe = parseAiResponse(aiResponse || "");
+        const recipe = parseAiResponse<Recipe>(aiResponse || "");
 
         recipe.title = formatTitle(recipe.title);
         recipe.minioId = crypto.randomUUID();
@@ -116,6 +124,25 @@ app.post(
 
         return c.json(recipe, 200);
     }
+);
+
+app.post(
+    "/grocery",
+    validator("json", (value, c) => {
+        const parsed = groceryReqSchema.safeParse(value);
+        if (!parsed.success) {
+            return c.text("invalid req body", 400);
+        }
+        return parsed.data;
+    }),
+    async (c) => {
+        const { ingredients } = c.req.valid("json");
+
+        const aiResponse = await getGroceryListFromIngredients(ingredients);
+        const list = parseAiResponse<Grocery>(aiResponse || "");
+
+        return c.json(list, 200);
+   }
 );
 
 export default {
